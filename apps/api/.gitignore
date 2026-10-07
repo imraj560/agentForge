@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+jspm_packages/
+web_modules/
+
+# Environment variables & secrets (CRITICAL for LLM / MCP keys)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+*.pem
+*.key
+
+# Build & Output directories
+dist/
+build/
+out/
+.next/
+.output/
+*.tsbuildinfo
+
+# Logs & Tracing
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# LangChain / LangGraph & MCP tracing / temp files
+.langgraph/
+.langchain/
+langgraph_api/
+*.langgraph
+*.db
+*.sqlite
+*.sqlite3
+
+# Test & Coverage
+coverage/
+.nyc_output/
+.vitest/
+
+# Editor & IDE files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# OS System Files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Cache directories
+.cache/
+.eslintcache
+.stylelintcache
+.mcp_cache/
