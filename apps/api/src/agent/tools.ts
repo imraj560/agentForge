@@ -1,32 +1,27 @@
 
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
+import { searchEngineeringKnowledge } from "./retriever";
 
 export const searchEngineeringDocs = tool(
   async ({ query }) => {
-    console.log(`[Tool] Searching engineering docs: ${query}`);
+    console.log(`[Tool] RAG search: ${query}`);
 
-    // Mock knowledge base for learning tool calling.
-    return JSON.stringify([
-      {
-        title: "API Rate Limiting",
-        content:
-          "HTTP 429 responses commonly indicate that a rate limit was exceeded. Check rate-limit configuration, request volume, and retry behavior.",
-      },
-      {
-        title: "Distributed Rate Limiting",
-        content:
-          "When an application runs multiple instances, verify whether rate-limit counters are shared or maintained separately by each instance.",
-      },
-    ]);
+    const results = await searchEngineeringKnowledge(query);
+
+    return JSON.stringify({
+      query,
+      resultCount: results.length,
+      results,
+    });
   },
   {
     name: "search_engineering_docs",
     description:
-      "Search internal engineering documentation for information relevant to a software issue. Use this when documentation could help answer the question.",
+      "Search the engineering knowledge base using semantic retrieval. Use this to find relevant troubleshooting guides, architecture notes, and engineering practices.",
     schema: z.object({
       query: z.string().describe(
-        "A concise search query describing what information is needed."
+        "A question or search phrase describing the engineering information needed."
       ),
     }),
   }
