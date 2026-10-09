@@ -21,6 +21,7 @@ app.post("/api/agent", async (req, res) => {
 
     const result = await agent.invoke({
       userMessage: message,
+      messages: [],
     });
 
     return res.json({

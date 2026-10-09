@@ -1,96 +1,96 @@
 
-import { ChatOpenAI } from "@langchain/openai";
-import { StateGraph, START, END } from "@langchain/langgraph";
 import {
-  InvestigationSchema,
-  type AgentState,
-} from "./state";
+  StateGraph,
+  START,
+  END,
+  MessagesAnnotation,
+} from "@langchain/langgraph";
+import { ToolNode } from "@langchain/langgraph/prebuilt";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { ChatOpenAI } from "@langchain/openai";
+import { tools } from "./tools";
+import type { AgentState } from "./state";
 
 const model = new ChatOpenAI({
   model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
   temperature: 0,
 });
 
-const structuredModel = model.withStructuredOutput(
-  InvestigationSchema
-);
+const modelWithTools = model.bindTools(tools);
+const toolNode = new ToolNode(tools);
 
 const analyze = async (state: AgentState) => {
-  const analysis = await structuredModel.invoke([
-    {
-      role: "system",
-      content: `
+  const response = await modelWithTools.invoke([
+    new SystemMessage(`
 You are AgentForge, a software investigation assistant.
 
-Analyze the user's reported software problem.
-Identify plausible causes without presenting them as confirmed facts.
-Provide practical investigation steps.
-If critical evidence is missing, indicate that more information is needed.
-Do not claim to have inspected logs, code, or infrastructure.
-      `.trim(),
-    },
-    {
-      role: "user",
-      content: state.userMessage,
-    },
+Use the available tools when they can provide useful evidence.
+For API 429 errors, consider searching engineering documentation
+and inspecting the sample API logs.
+
+Never claim mock data is real production evidence.
+Do not invent findings that the tools did not return.
+If a tool result is insufficient, explain the uncertainty.
+    `.trim()),
+    new HumanMessage(state.userMessage),
+    ...state.messages,
   ]);
 
-  return { analysis };
+  return { messages: [response] };
+};
+
+const routeAfterAnalysis = (state: AgentState) => {
+  const lastMessage = state.messages[state.messages.length - 1];
+
+  if (
+    lastMessage &&
+    "tool_calls" in lastMessage &&
+    Array.isArray(lastMessage.tool_calls) &&
+    lastMessage.tool_calls.length > 0
+  ) {
+    return "tools";
+  }
+
+  return "respond";
 };
 
 const respond = async (state: AgentState) => {
-  const analysis = state.analysis;
+  const lastMessage = state.messages[state.messages.length - 1];
 
-  if (!analysis) {
-    throw new Error("Investigation analysis is missing.");
-  }
-
-  const response = [
-    `Summary: ${analysis.summary}`,
-    "",
-    "Possible causes:",
-    ...analysis.possibleCauses.map((cause) => `- ${cause}`),
-    "",
-    "Investigation steps:",
-    ...analysis.investigationSteps.map((step) => `- ${step}`),
-    "",
-    `More information needed: ${
-      analysis.needsMoreInformation ? "Yes" : "No"
-    }`,
-  ].join("\n");
+  const response =
+    typeof lastMessage?.content === "string"
+      ? lastMessage.content
+      : JSON.stringify(lastMessage?.content ?? "");
 
   return { response };
 };
 
-const graph = new StateGraph<AgentState>({
+const graph = new StateGraph({
   channels: {
     userMessage: {
-      value: (_, next) => next,
+      value: (_: string, next: string) => next,
       default: () => "",
     },
+    messages: MessagesAnnotation.spec.messages,
     analysis: {
-      value: (_, next) => next,
+      value: (_: unknown, next: unknown) => next,
       default: () => undefined,
     },
     response: {
-      value: (_, next) => next,
+      value: (_: string | undefined, next: string) => next,
       default: () => undefined,
     },
   },
 })
   .addNode("analyze", analyze)
+  .addNode("tools", toolNode)
   .addNode("respond", respond)
   .addEdge(START, "analyze")
-  .addEdge("analyze", "respond")
+  .addConditionalEdges("analyze", routeAfterAnalysis, {
+    tools: "tools",
+    respond: "respond",
+  })
+  .addEdge("tools", "analyze")
   .addEdge("respond", END);
 
 export const agent = graph.compile();
-
-/**Test Code to see things are in order */
-// const result = await agent.invoke({
-
-//     userMessage:"Why is my API returning 429 errors?"
-
-// })
-
-// console.log(result)
