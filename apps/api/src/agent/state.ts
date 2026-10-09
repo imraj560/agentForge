@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { BaseMessage } from "@langchain/core/messages";
 
 export const InvestigationSchema = z.object({
   summary: z.string().describe(
@@ -21,6 +22,7 @@ export type InvestigationAnalysis = z.infer<
 
 export interface AgentState {
   userMessage: string;
+  messages: BaseMessage[]; //stores conversation between tools and llm
   analysis?: InvestigationAnalysis;
   response?: string;
 }
