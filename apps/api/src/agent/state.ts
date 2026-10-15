@@ -14,6 +14,12 @@ export const InvestigationSchema = z.object({
   needsMoreInformation: z
     .boolean()
     .describe("Whether more information is needed to investigate reliably."),
+  evidence: z.array(
+  z.object({
+    finding: z.string(),
+    source: z.string(),
+  })
+  ),  
 });
 
 export type InvestigationAnalysis = z.infer<
