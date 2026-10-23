@@ -19,6 +19,7 @@ export const InvestigationSchema = z.object({
   z.object({
     finding: z.string(),
     source: z.string(),
+    type: z.enum(["observation", "hypothesis"]),
   })
   ),  
 });
