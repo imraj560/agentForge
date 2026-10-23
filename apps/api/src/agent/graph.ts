@@ -102,6 +102,44 @@ const routeAfterInvestigation = (
 
 const toolNode = new ToolNode(tools);
 
+
+function verifyEvidenceSources(
+  analysis: InvestigationAnalysis,
+  messages: BaseMessage[]
+): InvestigationAnalysis {
+  const availableSources = new Set<string>();
+
+  for (const message of messages) {
+    const content =
+      typeof message.content === "string"
+        ? message.content
+        : JSON.stringify(message.content);
+
+    // Match source paths returned by the RAG tool.
+    const sourceMatches = content.match(
+      /docs\/[a-zA-Z0-9_-]+\.md/g
+    );
+
+    sourceMatches?.forEach((source) => availableSources.add(source));
+
+    // Recognize the source label returned by the mock-log tool.
+    if (content.includes("mock_logs")) {
+      availableSources.add("mock_logs");
+    }
+  }
+
+  return {
+    ...analysis,
+    evidence: analysis.evidence.map((item) => ({
+      ...item,
+      source: availableSources.has(item.source)
+        ? item.source
+        : "UNVERIFIED_SOURCE",
+    })),
+  };
+}
+
+
 const analyze = async (state: typeof State.State) => {
   const result = await structuredModel.invoke([
     new SystemMessage(`
@@ -131,8 +169,14 @@ Never invent sources, logs, or confirmed root causes.
     ),
   ]);
 
-  return { analysis: result };
-};
+    const verifiedResult = verifyEvidenceSources(
+      result,
+      state.messages
+    );
+
+    return { analysis: verifiedResult };
+    
+    };
 
 const respond = async (state: typeof State.State) => {
   const analysis = state.analysis;
