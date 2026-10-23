@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { BaseMessage } from "@langchain/core/messages";
 
 export const InvestigationSchema = z.object({
+
   summary: z.string().describe(
     "A concise summary of the reported software problem."
   ),

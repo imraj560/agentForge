@@ -21,11 +21,11 @@ async function getVectorStore(): Promise<MemoryVectorStore> {
       const chunks = await splitter.splitDocuments(
         engineeringDocuments
       );
-
+      
       return MemoryVectorStore.fromDocuments(
         chunks,
         embeddings
-      );
+      ); 
     })().catch((error) => {
       vectorStorePromise = undefined;
       throw error;

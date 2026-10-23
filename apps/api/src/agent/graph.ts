@@ -1,4 +1,3 @@
-
 import {
   Annotation,
   StateGraph,
@@ -24,7 +23,7 @@ import { buildInvestigationContext } from "./context";
 const model = new ChatOpenAI({
   model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
   temperature: 0,
-});
+}); 
 
 const modelWithTools = model.bindTools(tools);
 
@@ -33,6 +32,7 @@ const structuredModel = model.withStructuredOutput(
 );
 
 const State = Annotation.Root({
+
   userMessage: Annotation<string>({
     reducer: (_, next) => next,
     default: () => "",
@@ -53,6 +53,7 @@ const State = Annotation.Root({
     reducer: (_, next) => next,
     default: () => undefined,
   }),
+
 });
 
 
