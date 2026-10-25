@@ -3,6 +3,8 @@ import {
   StateGraph,
   START,
   END,
+  interrupt,
+  MemorySaver,
 } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import {
@@ -54,6 +56,23 @@ const State = Annotation.Root({
     default: () => undefined,
   }),
 
+   proposedAction: Annotation<string | undefined>({
+    reducer: (_, next) => next,
+    default: () => undefined,
+  }),
+
+  approvalStatus: Annotation<
+    "pending" | "approved" | "rejected" | undefined
+  >({
+    reducer: (_, next) => next,
+    default: () => undefined,
+  }),
+
+  actionResult: Annotation<string | undefined>({
+    reducer: (_, next) => next,
+    default: () => undefined,
+  })
+
 });
 
 
@@ -93,7 +112,12 @@ const routeAfterInvestigation = (
 ) => {
   const lastMessage = state.messages.at(-1);
 
-  if (lastMessage?.tool_calls?.length) {
+  if (
+    lastMessage &&
+    "tool_calls" in lastMessage &&
+    Array.isArray(lastMessage.tool_calls) &&
+    lastMessage.tool_calls.length > 0
+  ) {
     return "tools";
   }
 
@@ -214,11 +238,40 @@ const respond = async (state: typeof State.State) => {
   return { response };
 };
 
+/**Human in the loop function */
+
+const requestApproval = async (state: typeof State.State) => {
+  if (!state.proposedAction) {
+    return {
+      approvalStatus: undefined,
+      actionResult: "No action was proposed.",
+    };
+  }
+
+  const decision = interrupt({
+    type: "action_approval",
+    action: state.proposedAction,
+    message: "Do you approve this proposed action?",
+  }) as { approved?: boolean };
+
+  const approved = decision?.approved === true;
+
+  return {
+    approvalStatus: approved ? "approved" as const : "rejected" as const,
+    actionResult: approved
+      ? "Action approved. Ready for simulated execution."
+      : "Action rejected. No action was executed.",
+  };
+};
+
+const checkpointer = new MemorySaver();
+
 export const agent = new StateGraph(State)
   .addNode("investigate", investigate)
   .addNode("tools", toolNode)
   .addNode("analyze", analyze)
   .addNode("respond", respond)
+  .addNode("requestApproval", requestApproval)
   .addEdge(START, "investigate")
   .addConditionalEdges("investigate", routeAfterInvestigation, {
     tools: "tools",
@@ -226,5 +279,6 @@ export const agent = new StateGraph(State)
   })
   .addEdge("tools", "investigate")
   .addEdge("analyze", "respond")
-  .addEdge("respond", END)
-  .compile();
+  .addEdge("respond", "requestApproval")
+  .addEdge("requestApproval", END)
+  .compile({ checkpointer });
