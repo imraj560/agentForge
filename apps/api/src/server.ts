@@ -13,11 +13,25 @@ app.use(express.json());
 
 app.post("/api/agent", async (req, res) => {
   try {
-    const { message, proposedAction } = req.body;
+    const { message, actionType, proposedAction } = req.body;
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({
         error: "message is required",
+      });
+    }
+
+    if (actionType !== undefined && typeof actionType !== "string") {
+      return res.status(400).json({
+        error: "actionType must be a string",
+      });
+    }
+
+    if (
+      (actionType === undefined) !== (proposedAction === undefined)
+    ) {
+      return res.status(400).json({
+        error: "actionType and proposedAction must be provided together",
       });
     }
 
@@ -38,6 +52,7 @@ app.post("/api/agent", async (req, res) => {
       {
         userMessage: message,
         messages: [],
+        actionType,
         proposedAction,
       },
       {

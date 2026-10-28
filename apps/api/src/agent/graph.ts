@@ -21,6 +21,8 @@ import {
 import { tools } from "./tools";
 
 import { buildInvestigationContext } from "./context";
+import { executeSimulatedAction } from "./actionExecutor";
+import { evaluateActionPolicy } from "./actionPolicy";
 
 const model = new ChatOpenAI({
   model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
@@ -68,10 +70,20 @@ const State = Annotation.Root({
     default: () => undefined,
   }),
 
+  actionType: Annotation<string | undefined>({
+  reducer: (_, next) => next,
+  default: () => undefined,
+  }),
+
   actionResult: Annotation<string | undefined>({
     reducer: (_, next) => next,
     default: () => undefined,
-  })
+  }),
+
+  executionStatus: Annotation<"simulated" | "blocked" | undefined>({
+  reducer: (_, next) => next,
+  default: () => undefined,
+  }),
 
 });
 
@@ -241,26 +253,85 @@ const respond = async (state: typeof State.State) => {
 /**Human in the loop function */
 
 const requestApproval = async (state: typeof State.State) => {
-  if (!state.proposedAction) {
+  // No action was proposed; nothing to execute.
+  if (!state.proposedAction && !state.actionType) {
     return {
       approvalStatus: undefined,
+      executionStatus: undefined,
       actionResult: "No action was proposed.",
     };
   }
 
-  const decision = interrupt({
-    type: "action_approval",
-    action: state.proposedAction,
-    message: "Do you approve this proposed action?",
-  }) as { approved?: boolean };
+  // Require both fields when an action is proposed.
+  if (!state.actionType || !state.proposedAction) {
+    return {
+      approvalStatus: "rejected" as const,
+      executionStatus: "blocked" as const,
+      actionResult:
+        "Action blocked: both actionType and proposedAction are required.",
+    };
+  }
 
-  const approved = decision?.approved === true;
+  // Step 1: Evaluate the existing action policy.
+  const policy = evaluateActionPolicy(state.actionType);
 
+  console.log("[Action Policy]", {
+    actionType: state.actionType,
+    decision: policy.decision,
+  });
+
+  // Step 2: Block prohibited actions.
+  if (policy.decision === "deny") {
+    return {
+      approvalStatus: "rejected" as const,
+      executionStatus: "blocked" as const,
+      actionResult: `Action blocked by policy: ${policy.reason}`,
+    };
+  }
+
+  // Step 3: Request approval only when the policy requires it.
+  let approved = false;
+
+  if (policy.decision === "require_approval") {
+    const decision = interrupt({
+      type: "action_approval",
+      actionType: state.actionType,
+      action: state.proposedAction,
+      message: "Do you approve this proposed action?",
+      reason: policy.reason,
+    }) as { approved?: boolean };
+
+    approved = decision?.approved === true;
+
+    if (!approved) {
+      return {
+        approvalStatus: "rejected" as const,
+        executionStatus: "blocked" as const,
+        actionResult: "Action rejected. No action was executed.",
+      };
+    }
+  }
+
+  // Step 4: Execute only after the policy and approval checks pass.
+  const execution = executeSimulatedAction({
+    actionType: state.actionType,
+    proposedAction: state.proposedAction,
+    approved,
+  });
+
+  console.log("[Action Execution]", {
+    actionType: state.actionType,
+    status: execution.status,
+  });
+
+  // Step 5: Return the execution outcome.
   return {
-    approvalStatus: approved ? "approved" as const : "rejected" as const,
-    actionResult: approved
-      ? "Action approved. Ready for simulated execution."
-      : "Action rejected. No action was executed.",
+    approvalStatus:
+      policy.decision === "require_approval"
+        ? ("approved" as const)
+        : undefined,
+    executionStatus: execution.status,
+    actionResult: execution.result,
   };
 };
 
