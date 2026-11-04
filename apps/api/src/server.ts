@@ -81,6 +81,7 @@ app.post("/api/agent", async (req, res) => {
       status: "completed",
       threadId,
       response: result.response,
+      recommendation: result.recommendation,
       approvalStatus: result.approvalStatus,
       actionResult: result.actionResult,
     });
