@@ -286,6 +286,20 @@ Never invent sources, logs, or confirmed root causes.
       ),
     ]);
 
+    const availableFindings = new Set(
+      state.analysis.evidence.map((item) => item.finding)
+    );
+
+    const unsupportedFindings = result.basedOnEvidence.filter(
+      (finding) => !availableFindings.has(finding)
+    );
+
+    if (unsupportedFindings.length > 0) {
+      throw new Error(
+        `Recommendation references unsupported findings: ${unsupportedFindings.join("; ")}`
+      );
+    }
+
     return {
       recommendation: result,
     };
@@ -334,9 +348,18 @@ const respond = async (state: typeof State.State) => {
 
 /**Human in the loop function */
 
+
 const requestApproval = async (state: typeof State.State) => {
+  // Resolve the action: prefer manually supplied values,
+  // otherwise use the agent-generated recommendation.
+  const actionType =
+    state.actionType ?? state.recommendation?.actionType;
+
+  const proposedAction =
+    state.proposedAction ?? state.recommendation?.proposedAction;
+
   // No action was proposed; nothing to execute.
-  if (!state.proposedAction && !state.actionType) {
+  if (!actionType && !proposedAction) {
     return {
       approvalStatus: undefined,
       executionStatus: undefined,
@@ -345,7 +368,7 @@ const requestApproval = async (state: typeof State.State) => {
   }
 
   // Require both fields when an action is proposed.
-  if (!state.actionType || !state.proposedAction) {
+  if (!actionType || !proposedAction) {
     return {
       approvalStatus: "rejected" as const,
       executionStatus: "blocked" as const,
@@ -354,11 +377,11 @@ const requestApproval = async (state: typeof State.State) => {
     };
   }
 
-  // Step 1: Evaluate the existing action policy.
-  const policy = evaluateActionPolicy(state.actionType);
+  // Step 1: Evaluate the deterministic action policy.
+  const policy = evaluateActionPolicy(actionType);
 
   console.log("[Action Policy]", {
-    actionType: state.actionType,
+    actionType,
     decision: policy.decision,
   });
 
@@ -371,14 +394,14 @@ const requestApproval = async (state: typeof State.State) => {
     };
   }
 
-  // Step 3: Request approval only when the policy requires it.
+  // Step 3: Request approval only when policy requires it.
   let approved = false;
 
   if (policy.decision === "require_approval") {
     const decision = interrupt({
       type: "action_approval",
-      actionType: state.actionType,
-      action: state.proposedAction,
+      actionType,
+      action: proposedAction,
       message: "Do you approve this proposed action?",
       reason: policy.reason,
     }) as { approved?: boolean };
@@ -394,15 +417,15 @@ const requestApproval = async (state: typeof State.State) => {
     }
   }
 
-  // Step 4: Execute only after the policy and approval checks pass.
+  // Step 4: Execute only after policy and approval checks pass.
   const execution = executeSimulatedAction({
-    actionType: state.actionType,
-    proposedAction: state.proposedAction,
+    actionType,
+    proposedAction,
     approved,
   });
 
   console.log("[Action Execution]", {
-    actionType: state.actionType,
+    actionType,
     status: execution.status,
   });
 
@@ -416,6 +439,7 @@ const requestApproval = async (state: typeof State.State) => {
     actionResult: execution.result,
   };
 };
+
 
 
 const checkpointer = new MemorySaver();
