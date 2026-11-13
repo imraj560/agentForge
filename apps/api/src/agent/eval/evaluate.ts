@@ -1,6 +1,6 @@
 
-import { agent } from "./graph";
-import { evaluationDataset } from "./evaluation-dataset";
+import { agent } from "../graph";
+import { evaluationDataset } from "../eval/evaluation-dataset";
 import "dotenv/config";
 
 async function runEvaluation() {

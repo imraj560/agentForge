@@ -1,4 +1,4 @@
-import { evaluateActionPolicy } from "./actionPolicy";
+import { evaluateActionPolicy } from "../actionPolicy";
 
 const testCases = [
   {
