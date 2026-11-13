@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { recommendAction } from "./graph";
-import { evaluateActionPolicy } from "./actionPolicy";
-import type { InvestigationAnalysis } from "./state";
+import { recommendAction } from "../graph";
+import { evaluateActionPolicy } from "../actionPolicy";
+import type { InvestigationAnalysis } from "../state";
 
 const analysis: InvestigationAnalysis = {
   summary:
@@ -68,20 +68,50 @@ async function testRecommendation() {
   // Confirm that the recommendation's action is evaluated by policy.
   const policy = evaluateActionPolicy(recommendation.actionType);
 
+    if (
+      recommendation.actionType === "delete_production_data" &&
+      policy.decision !== "deny"
+    ) {
+      throw new Error("Policy failed to deny a prohibited action.");
+    }
+
+    if (policy.decision === "deny") {
+    throw new Error(
+      "The agent recommended a prohibited action."
+    );
+  }
+
+  const expectedApproval =
+    policy.decision === "require_approval";
+
+  if (recommendation.requiresHumanApproval !== expectedApproval) {
+    throw new Error(
+      `Approval mismatch: expected ${expectedApproval}, ` +
+      `but the agent returned ${recommendation.requiresHumanApproval}`
+    );
+  }
+
+  console.log(
+    "Recommendation approval consistency check passed."
+  );
+
   console.log("\nPolicy decision:");
   console.log(policy);
 
-  if (
-    recommendation.actionType === "delete_production_data" &&
-    policy.decision !== "deny"
-  ) {
-    throw new Error("Policy failed to deny a prohibited action.");
-  }
 
     // Verify that recommendations reference findings in the analysis.
   const availableFindings = new Set(
     analysis.evidence.map((item) => item.finding)
   );
+
+    // Step 13.2: Ensure the recommendation contains evidence.
+  if (recommendation.basedOnEvidence.length === 0) {
+    throw new Error(
+      "Recommendation must reference at least one evidence finding."
+    );
+  }
+
+  console.log("Recommendation has evidence references.");
 
   for (const finding of recommendation.basedOnEvidence) {
     if (!availableFindings.has(finding)) {
@@ -92,6 +122,25 @@ async function testRecommendation() {
   }
 
   console.log("Evidence reference checks passed.");
+
+
+  // Negative test: deliberately introduce an invalid finding.
+  const invalidFindings = [
+    "This evidence does not exist in the investigation."
+  ];
+
+  const hasInvalidEvidence = invalidFindings.some(
+    (finding) => !availableFindings.has(finding)
+  );
+
+  if (!hasInvalidEvidence) {
+    throw new Error(
+      "Negative test failed: invalid evidence was not detected."
+    );
+  }
+
+  console.log("Negative evidence test passed.");
+
 
   console.log("\nRecommendation structure and policy checks passed.");
 }
